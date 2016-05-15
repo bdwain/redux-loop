@@ -27,9 +27,9 @@ export function effectToPromise(effect) {
 
   switch (effect.type) {
     case effectTypes.PROMISE:
-      return effect.factory(...effect.args).then((action) => [action]);
+      return effect.factory(...effect.args).then([action].filter(Boolean));
     case effectTypes.CALL:
-      return Promise.resolve([effect.factory(...effect.args)]);
+      return Promise.resolve([effect.factory(...effect.args)].filter(Boolean));
     case effectTypes.BATCH:
       return Promise.all(effect.effects.map(effectToPromise)).then(flatten);
     case effectTypes.CONSTANT:
@@ -37,8 +37,8 @@ export function effectToPromise(effect) {
     case effectTypes.NONE:
       return Promise.resolve([]);
     case effectTypes.LIFT:
-      return effectToPromise(effect.effect).then((actions) =>
-        actions.map((action) => effect.factory(...effect.args, action))
+      return effectToPromise(effect.effect).then(actions =>
+        actions.map((action) => effect.factory(...effect.args, action)).filter(Boolean)
       );
   }
 }
