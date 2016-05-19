@@ -6,6 +6,7 @@ const effectTypes = {
   PROMISE: 'PROMISE',
   CALL: 'CALL',
   BATCH: 'BATCH',
+  SERIAL: 'SERIAL',
   CONSTANT: 'CONSTANT',
   NONE: 'NONE',
   LIFT: 'LIFT',
@@ -32,6 +33,19 @@ export function effectToPromise(effect) {
       return Promise.resolve([effect.factory(...effect.args)].filter(Boolean));
     case effectTypes.BATCH:
       return Promise.all(effect.effects.map(effectToPromise)).then(flatten);
+    case effectTypes.SERIAL:
+      return new Promise(resolve => {
+        if(effect.effects.length){
+          effectToPromise(effect.effects[0]).then(result => {
+            effectToPromise(batch(effects.slice(1))).then(innerResult => {
+              resolve(result.concat(innerResult));
+            })
+          });
+        }
+        else{
+          resolve([]);
+        }
+      }).then(flatten);
     case effectTypes.CONSTANT:
       return Promise.resolve([effect.action]);
     case effectTypes.NONE:
@@ -98,6 +112,17 @@ export function batch(effects) {
   return {
     effects,
     type: effectTypes.BATCH,
+    [isEffectSymbol]: true
+  };
+}
+
+/**
+ * Composes an array of effects together serially.
+ */
+export function serial(effects) {
+  return {
+    effects,
+    type: effectTypes.SERIAL,
     [isEffectSymbol]: true
   };
 }

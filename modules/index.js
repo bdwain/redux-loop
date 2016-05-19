@@ -11,6 +11,7 @@ import {
   none,
   constant,
   promise,
+  serial,
   call,
   lift,
 } from './effects';
@@ -29,6 +30,7 @@ const Effects = {
   promise,
   call,
   batch,
+  serial,
   none,
   lift,
 };
