@@ -37,7 +37,7 @@ export function effectToPromise(effect) {
       return new Promise(resolve => {
         if(effect.effects.length){
           effectToPromise(effect.effects[0]).then(result => {
-            effectToPromise(batch(effect.effects.slice(1))).then(innerResult => {
+            effectToPromise(serial(effect.effects.slice(1))).then(innerResult => {
               resolve(result.concat(innerResult));
             })
           });
