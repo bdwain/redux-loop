@@ -28,7 +28,7 @@ export function effectToPromise(effect) {
 
   switch (effect.type) {
     case effectTypes.PROMISE:
-      return effect.factory(...effect.args).then([action].filter(Boolean));
+      return effect.factory(...effect.args).then(action => [action].filter(Boolean));
     case effectTypes.CALL:
       return Promise.resolve([effect.factory(...effect.args)].filter(Boolean));
     case effectTypes.BATCH:
