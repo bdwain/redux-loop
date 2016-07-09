@@ -57,6 +57,11 @@ export function effectToPromise(effect) {
   }
 }
 
+export function isNone(object) {
+  return object ? object.type === effectTypes.NONE : false;
+}
+
+
 /**
  * Determines if the object was created with an effect creator.
  * @param {Object} object The object to inspect.
