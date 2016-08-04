@@ -2,7 +2,7 @@ import { throwInvariant, flatten, promisify, isPromiseLike } from './utils';
 
 
 const isCmdSymbol = Symbol('isCmd');
-const getDispatchSymbol = Symbol('getDispatch');
+const dispatchSymbol = Symbol('dispatch');
 const getStateSymbol = Symbol('getState');
 
 
@@ -25,7 +25,7 @@ export const isCmd = (object) => {
 
 function getMappedCmdArgs(args, dispatch, getState){
   return args.map(arg => {
-    if (arg === getDispatchSymbol) return dispatch
+    if (arg === dispatchSymbol) return dispatch
     else if (arg === getStateSymbol) return getState
     else return arg
   })
@@ -80,8 +80,7 @@ export const cmdToPromise = (cmd, dispatch, getState) => {
             }
             else resolve(result)
           })
-        }).then(flatten)
-      }
+        }).then(flatten)     }
       else return null
 
     case cmdTypes.MAP:
@@ -292,6 +291,6 @@ export default {
   sequence,
   map,
   none,
-  getDispatch: getDispatchSymbol,
+  dispatch: dispatchSymbol,
   getState: getStateSymbol
 }
