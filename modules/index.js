@@ -3,6 +3,7 @@ import {
   liftState,
   getModel,
   getCmd,
+  isLoop
 } from './loop';
 
 import Cmd from './cmd';
@@ -23,4 +24,5 @@ export {
   liftState,
   getModel,
   getCmd,
+  isLoop
 };
