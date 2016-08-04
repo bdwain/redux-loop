@@ -33,7 +33,7 @@ export function install() {
     }
 
     const runCmd = ({ originalAction, cmd }) => {
-      const cmdPromise = cmdToPromise(cmd)
+      const cmdPromise = cmdToPromise(cmd, dispatch, store.getState)
 
       if (!cmdPromise) return null
 

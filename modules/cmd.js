@@ -2,6 +2,8 @@ import { throwInvariant, flatten, promisify, isPromiseLike } from './utils';
 
 
 const isCmdSymbol = Symbol('isCmd');
+const getDispatchSymbol = Symbol('getDispatch');
+const getStateSymbol = Symbol('getState');
 
 
 const cmdTypes = {
@@ -21,11 +23,18 @@ export const isCmd = (object) => {
   return object ? object[isCmdSymbol] : false
 }
 
+function getMappedCmdArgs(args, dispatch, getState){
+  return args.map(arg => {
+    if (arg === getDispatchSymbol) return dispatch
+    else if (arg === getStateSymbol) return getState
+    else return arg
+  })
+}
 
-export const cmdToPromise = (cmd) => {
+export const cmdToPromise = (cmd, dispatch, getState) => {
   switch (cmd.type) {
     case cmdTypes.PROMISE:
-      return cmd.promiseFactory(...cmd.args)
+      return cmd.promiseFactory(...getMappedCmdArgs(cmd.args, dispatch, getState))
         .then(cmd.successActionCreator)
         .catch(cmd.failureActionCreator)
         .then((action) => {
@@ -33,11 +42,11 @@ export const cmdToPromise = (cmd) => {
         })
 
     case cmdTypes.CALL:
-      const result = cmd.resultFactory(...cmd.args)
+      const result = cmd.resultFactory(...getMappedCmdArgs(cmd.args, dispatch, getState))
       return Promise.resolve([cmd.actionCreator(result)])
 
     case cmdTypes.CALLBACK:
-      return promisify(cmd.nodeStyleFunction)(...cmd.args)
+      return promisify(cmd.nodeStyleFunction)(...getMappedCmdArgs(cmd.args, dispatch, getState))
         .then(cmd.successActionCreator)
         .catch(cmd.failureActionCreator)
         .then((action) => [action])
@@ -46,12 +55,12 @@ export const cmdToPromise = (cmd) => {
       return Promise.resolve([cmd.action])
 
     case cmdTypes.ARBITRARY:
-      const possiblyPromise = cmd.func(...cmd.args)
+      const possiblyPromise = cmd.func(...getMappedCmdArgs(cmd.args, dispatch, getState))
       if (isPromiseLike(possiblyPromise)) return possiblyPromise.then(() => [])
       else return null
 
     case cmdTypes.BATCH:
-      const batchedPromises = cmd.cmds.map(cmdToPromise).filter((x) => x)
+      const batchedPromises = cmd.cmds.map(cmdToPromise, dispatch, getState).filter((x) => x)
       if (batchedPromises.length === 0) return null
       else if (batchedPromises.length === 1) return batchedPromises[0]
       else return Promise.all(batchedPromises).then(flatten)
@@ -76,7 +85,7 @@ export const cmdToPromise = (cmd) => {
       else return null
 
     case cmdTypes.MAP:
-      const possiblePromise = cmdToPromise(cmd.nestedCmd)
+      const possiblePromise = cmdToPromise(cmd.nestedCmd, dispatch, getState)
       if (!possiblePromise) return null
       return possiblePromise.then((actions) => actions.map(cmd.tagger))
 
@@ -282,5 +291,7 @@ export default {
   batch,
   sequence,
   map,
-  none
+  none,
+  getDispatch: getDispatchSymbol,
+  getState: getStateSymbol
 }
