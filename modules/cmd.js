@@ -60,7 +60,7 @@ export const cmdToPromise = (cmd, dispatch, getState) => {
       else return null
 
     case cmdTypes.BATCH:
-      const batchedPromises = cmd.cmds.map(cmdToPromise, dispatch, getState).filter((x) => x)
+      const batchedPromises = cmd.cmds.map(cmd => cmdToPromise(cmd, dispatch, getState)).filter((x) => x)
       if (batchedPromises.length === 0) return null
       else if (batchedPromises.length === 1) return batchedPromises[0]
       else return Promise.all(batchedPromises).then(flatten)
@@ -69,10 +69,10 @@ export const cmdToPromise = (cmd, dispatch, getState) => {
       const firstCmd = cmd.cmds.length ? cmd.cmds[0] : null
       if (firstCmd) {
         return new Promise(resolve => {
-          let firstPromise = cmdToPromise(firstCmd)
+          let firstPromise = cmdToPromise(firstCmd, dispatch, getState)
           if (!firstPromise) firstPromise = Promise.resolve([])
           firstPromise.then(result => {
-            const remaining = cmdToPromise(sequence(cmd.cmds.slice(1)))
+            const remaining = cmdToPromise(sequence(cmd.cmds.slice(1)), dispatch, getState)
             if (remaining) {
               remaining.then(innerResult => {
                 resolve(result.concat(innerResult))
