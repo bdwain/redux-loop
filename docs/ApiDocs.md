@@ -13,7 +13,7 @@
   * [`Cmd.promise(functionToRun, resolveActionCreator, rejectActionCreator, ...args)`](#cmdpromisefunctiontorun-resolveactioncreator-rejectactioncreator-args)
   * [`Cmd.batch(cmds)`](#cmdbatchcmds)
   * [`Cmd.sequence(cmds)`](#cmdsequencecmds)
-  * [`Cmd.arbitrary(function, ...args)`](#cmdarbitraryfunction-args)
+  * [`Cmd.arbitrary(functionToRun, ...args)`](#cmdarbitraryfunctiontorun-args)
   * [`Cmd.map(cmd, higherOrderActionCreator, [...additionalArgs])`](#cmdmapcmd-higherorderactioncreator-additionalargs)
 * [`combineReducers(reducersMap, [initialState, accessor, modifier])`](#combinereducersreducersmap-initialstate-accessor-modifier)
 
@@ -396,6 +396,33 @@ function reducer(state , action) {
 #### Notes
 
 `sequence` is similar to batch, but the cmds run one after the other. The resulting actions are still dispatched all at once after all cmds are done.
+
+### `Cmd.arbitrary(functionToRun, ...args)`
+
+* `functionToRun: (...Array<any>) => any` &ndash; a function that will run
+  some side effects (synchronous or asynchronous). 
+* `args: Array<any>` &ndash; any arguments to call `functionToRun` with.
+
+
+#### Notes
+
+`arbitrary` allows you to declaratively schedule a function with some arguments that
+can cause side effects. The return value is not checked and no action will be dispatched. The only exception to this is that if a promise is returned and the cmd is used in a batch or a sequence, the result will be held up until the promise is resolved or rejected.
+
+#### Examples
+
+```js
+const writeValueToStorage = (key, value) => {
+  localStorage.setItem(key, value);
+}
+
+// ...
+
+return loop(
+  state,
+  Cmd.arbitrary(writeValueToStorage, 'key', action.value)
+);
+```
 
 ### `Cmd.map(cmd, higherOrderActionCreator, [...additionalArgs])`
 
