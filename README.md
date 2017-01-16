@@ -123,8 +123,9 @@ function reducer(state = initialState, action) {
 ```
 
 Any reducer case can return a `loop` instead of a state object. A `loop` joins
-an updated model state with a cmd for the store to process. There are
-several options for cmds, all available under the `Cmd` object:
+an updated model state with a cmd for the store to process. A cmd is just 
+an object that describes what side effect should run, and what to do with
+the result. There are several options for cmds, all available under the `Cmd` object:
 
 - `call(functionToCall, resultActionCreator, ...args)`
   - Accepts a function to call that returns a value when called with `args`, and an
