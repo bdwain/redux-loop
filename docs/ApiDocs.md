@@ -15,6 +15,8 @@
   * [`Cmd.sequence(cmds)`](#cmdsequencecmds)
   * [`Cmd.arbitrary(functionToRun, ...args)`](#cmdarbitraryfunctiontorun-args)
   * [`Cmd.map(cmd, higherOrderActionCreator, [...additionalArgs])`](#cmdmapcmd-higherorderactioncreator-additionalargs)
+* [`Cmd.getState`](#cmdgetstate)
+* [`Cmd.dispatch`](#cmddispatch)
 * [`combineReducers(reducersMap, [initialState, accessor, modifier])`](#combinereducersreducersmap-initialstate-accessor-modifier)
 
 ## `install`
@@ -504,6 +506,70 @@ function reducer(state = { /* ... */ }, action) {
   }
 }
 ```
+
+## `Cmd.getState`
+
+#### Notes
+A symbol that can be passed to a Cmd as an arg (from a reducer) that will be replaced at the time the function is called with the getState method from the store
+
+#### Example
+
+```js
+import {loop, Cmd} from 'redux-loop';
+import {doSomething} from 'something.js';
+import {doSomethingResultAction} from './actions.js';
+function reducer(state, action) {
+  switch(action.type) {
+  case 'ACTION':
+    return loop(
+      {...state, initStarted: true},
+      Cmd.call(doSomething, doSomethingResultAction, Cmd.getState)
+    );
+  default:
+    return state;
+  }
+}
+
+//something.js
+export function doSomething(getState){
+   let value = getState().some.random.value;
+   console.log(value);
+}
+```
+
+## `Cmd.dispatch`
+
+#### Notes
+A symbol that can be passed to a Cmd as an arg (from a reducer) that will be replaced at the time the function is called with the dispatch method from the store
+
+#### Example
+
+```js
+import {loop, Cmd} from 'redux-loop';
+import {doSomething} from 'something.js';
+import {doSomethingResultAction} from './actions.js';
+function reducer(state, action) {
+  switch(action.type) {
+  case 'ACTION':
+    return loop(
+      {...state, initStarted: true},
+      Cmd.call(doSomething, doSomethingResultAction, Cmd.dispatch)
+    );
+  default:
+    return state;
+  }
+}
+
+//something.js
+export function doSomething(dispatch){
+  let value = someThing();
+    if(value === 123){
+       dispatch(valueIs123Action());
+    }
+    return value;
+}
+```
+  
 
 ## `combineReducers(reducersMap, [initialState, accessor, modifier])`
 
