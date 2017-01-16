@@ -128,24 +128,17 @@ an object that describes what side effect should run, and what to do with
 the result. There are several options for cmds, all available under the `Cmd` object:
 
 - `call(functionToCall, resultActionCreator, ...args)`
-  - Accepts a function to call that returns a value when called with `args`, and an
-  - action creator to transform the result into an action that gets dispatched.
+  - Accepts a function to call that returns a value when called with `args`, and an action creator to transform the result into an action that gets dispatched.
 - `promise(functionToCall, resolveActionCreator, rejectActionCreator, ...args)`
-  - Accepts a function to call that returns a `Promise` called with `args`, and action
-  - creators that transform the promise resolution or rejection value respectively
-  - into 
+  - Accepts a function to call that returns a `Promise` called with `args`, and action creators that transform the promise resolution or rejection value respectively into 
 - `constant(action)`
-  - Accepts an `action` instance to dispatch immediately once the current
-    dispatch cycle is completed.
+  - Accepts an `action` instance to dispatch immediately once the current dispatch cycle is completed.
 - `batch(cmds)`
-  - Accepts an array of other cmds and runs them in parallel, dispatching
-    the resulting actions in their original order once all cmds are resolved.
+  - Accepts an array of other cmds and runs them in parallel, dispatching the resulting actions in their original order once all cmds are resolved.
 - `sequence(cmds)`
   - The same as batch, but commands wait for the previous command to finish before starting.
 - `arbitrary(functionToCall, ...args)`
-  - Accepts a function to call with `args`, ignoring the result (though if used in 
-  - a batch with a function that returns a promise, the batch will not dispatch until the
-  - the promise resolves or rejects)
+  - Accepts a function to call with `args`, ignoring the result (though if used in a batch with a function that returns a promise, the batch will not dispatch until the the promise resolves or rejects)
 - `none()`
   - A no-op action, for convenience.
 
