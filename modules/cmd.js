@@ -209,7 +209,7 @@ const arbitrary = (func, ...args) => {
   if (process.env.NODE_ENV !== 'production') {
     throwInvariant(
       typeof func === 'function',
-      'Cmd.arbitrary: first argument to Cmd.promise must be a function that returns a promise'
+      'Cmd.arbitrary: first argument to Cmd.arbitrary must be a function'
     )
   }
 
