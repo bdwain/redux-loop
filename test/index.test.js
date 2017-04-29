@@ -11,8 +11,7 @@ test('a looped action gets dispatched after the action that initiated it is redu
       firstRun: false,
       secondRun: false,
       thirdRun: false,
-      fourthRun: false,
-      fifthRun: false,
+      fourthRun: false
     },
     prop2: true,
   }
@@ -23,14 +22,6 @@ test('a looped action gets dispatched after the action that initiated it is redu
   const thirdFailure = (error) => ({ type: 'THIRD_FAILURE' })
   const fourthAction = { type: 'FOURTH_ACTION' }
   const nestAction = (action) => ({ type: 'NESTED_ACTION', payload: action })
-  const fifthSuccess = (value) => ({ type: 'FIFTH_ACTION', payload: value })
-  const fifthFailure = (error) => ({ type: 'FIFTH_FAILURE' })
-
-  const callbackFn = (arg1, cb) => {
-    setTimeout(() => {
-      cb(null, arg1)
-    })
-  }
 
   const doThirdLater = (value) => {
     return new Promise((resolve, reject) => {
@@ -47,13 +38,16 @@ test('a looped action gets dispatched after the action that initiated it is redu
           { ...state, firstRun: true },
           Cmd.batch([
             Cmd.batch([
-              Cmd.constant(secondAction),
+              Cmd.action(secondAction),
               Cmd.none,
-              Cmd.map(Cmd.constant(fourthAction), nestAction),
-              Cmd.callback(callbackFn, fifthSuccess, fifthFailure, 'hi')
+              Cmd.map(Cmd.action(fourthAction), nestAction)
             ]),
-            Cmd.arbitrary((arg) => arbitraryValue = arg, 5),
-            Cmd.promise(doThirdLater, thirdSuccess, thirdFailure, 'hello'),
+            Cmd.run(arg => arbitraryValue = arg, {args: [5]}),
+            Cmd.run(doThirdLater, {
+              successActionCreator: thirdSuccess,
+              failActionCreator: thirdFailure,
+              args: ['hello']
+            }),
           ])
         )
 
@@ -66,7 +60,7 @@ test('a looped action gets dispatched after the action that initiated it is redu
       case 'NESTED_ACTION':
         return loop(
           state,
-          Cmd.constant(action.payload)
+          Cmd.action(action.payload)
         )
 
       case 'FOURTH_ACTION':
@@ -100,7 +94,6 @@ test('a looped action gets dispatched after the action that initiated it is redu
         secondRun: false,
         thirdRun: false,
         fourthRun: false,
-        fifthRun: false,
       },
       prop2: true,
     },
@@ -117,7 +110,6 @@ test('a looped action gets dispatched after the action that initiated it is redu
             secondRun: true,
             thirdRun: 'hello',
             fourthRun: true,
-            fifthRun: 'hi',
           },
           prop2: true,
         },

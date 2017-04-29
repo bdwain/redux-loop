@@ -1,4 +1,4 @@
-import { throwInvariant, flatten, promisify, isPromiseLike } from './utils';
+import { throwInvariant, flatten, isPromiseLike } from './utils';
 
 
 const isCmdSymbol = Symbol('isCmd');
@@ -7,23 +7,20 @@ const getStateSymbol = Symbol('getState');
 
 
 const cmdTypes = {
-  PROMISE: 'PROMISE',
-  CALL: 'CALL',
-  CALLBACK: 'CALLBACK',
-  CONSTANT: 'CONSTANT',
-  ARBITRARY: 'ARBITRARY',
+  RUN: 'RUN',
+  ACTION: 'ACTION',
+  //CALLBACK: 'CALLBACK',
   BATCH: 'BATCH',
   MAP: 'MAP',
   NONE: 'NONE',
   SEQUENCE: 'SEQUENCE'
 }
 
-
 export const isCmd = (object) => {
   return object ? object[isCmdSymbol] : false
 }
 
-function getMappedCmdArgs(args, dispatch, getState){
+function getMappedCmdArgs(args = [], dispatch, getState){
   return args.map(arg => {
     if (arg === dispatchSymbol) return dispatch
     else if (arg === getStateSymbol) return getState
@@ -31,36 +28,40 @@ function getMappedCmdArgs(args, dispatch, getState){
   })
 }
 
+function handleRunCmd(cmd, dispatch, getState){
+  let onSuccess = cmd.successActionCreator || (() => {}),
+      onFail = cmd.failActionCreator || (() => {})
+
+  try{
+    let result = cmd.func(...getMappedCmdArgs(cmd.args, dispatch, getState))
+
+    if (isPromiseLike(result) && !cmd.forceSync){
+      return result.then(onSuccess, onFail).then(action => {
+        return action ? [action] : null;
+      })
+    }
+    let resultAction = onSuccess(result);
+    return resultAction ? Promise.resolve([resultAction]) : null;
+  }
+  catch(err){
+    if(!cmd.failActionCreator){
+      throw err //don't swallow errors if they are not handling them
+    }
+    let resultAction = onFail(err);
+    return resultAction ? Promise.resolve([resultAction]) : null;
+  }
+}
+
 export const cmdToPromise = (cmd, dispatch, getState) => {
   switch (cmd.type) {
-    case cmdTypes.PROMISE:
-      return cmd.promiseFactory(...getMappedCmdArgs(cmd.args, dispatch, getState))
-        .then(cmd.successActionCreator)
-        .catch(cmd.failureActionCreator)
-        .then((action) => {
-          return [action]
-        })
+    case cmdTypes.RUN:
+      return handleRunCmd(cmd, dispatch, getState)
 
-    case cmdTypes.CALL:
-      const result = cmd.resultFactory(...getMappedCmdArgs(cmd.args, dispatch, getState))
-      return Promise.resolve([cmd.actionCreator(result)])
-
-    case cmdTypes.CALLBACK:
-      return promisify(cmd.nodeStyleFunction)(...getMappedCmdArgs(cmd.args, dispatch, getState))
-        .then(cmd.successActionCreator)
-        .catch(cmd.failureActionCreator)
-        .then((action) => [action])
-
-    case cmdTypes.CONSTANT:
-      return Promise.resolve([cmd.action])
-
-    case cmdTypes.ARBITRARY:
-      const possiblyPromise = cmd.func(...getMappedCmdArgs(cmd.args, dispatch, getState))
-      if (isPromiseLike(possiblyPromise)) return possiblyPromise.then(() => [])
-      else return null
+    case cmdTypes.ACTION:
+      return Promise.resolve([cmd.actionToDispatch])
 
     case cmdTypes.BATCH:
-      const batchedPromises = cmd.cmds.map(cmd => cmdToPromise(cmd, dispatch, getState)).filter((x) => x)
+      const batchedPromises = cmd.cmds.map(nestedCmd => cmdToPromise(nestedCmd, dispatch, getState)).filter(x => x)
       if (batchedPromises.length === 0) return null
       else if (batchedPromises.length === 1) return batchedPromises[0]
       else return Promise.all(batchedPromises).then(flatten)
@@ -80,7 +81,8 @@ export const cmdToPromise = (cmd, dispatch, getState) => {
             }
             else resolve(result)
           })
-        }).then(flatten)     }
+        }).then(flatten)
+      }
       else return null
 
     case cmdTypes.MAP:
@@ -88,11 +90,55 @@ export const cmdToPromise = (cmd, dispatch, getState) => {
       if (!possiblePromise) return null
       return possiblePromise.then((actions) => actions.map(cmd.tagger))
 
+    /*case cmdTypes.CALLBACK:
+      return promisify(cmd.nodeStyleFunction)(...getMappedCmdArgs(cmd.args, dispatch, getState))
+        .then(cmd.successActionCreator)
+        .catch(cmd.failureActionCreator)
+        .then((action) => [action])*/
+
     case cmdTypes.NONE:
       return null
   }
 }
 
+const run = (
+  func,
+  options = {}
+) => {
+  if (process.env.NODE_ENV !== 'production') {
+    throwInvariant(
+      typeof func === 'function',
+      'Cmd.run: first argument to Cmd.run must be a function'
+    )
+
+    throwInvariant(
+      typeof options === 'object',
+      'Cmd.run: second argument to Cmd.run must be an options object'
+    )
+
+    throwInvariant(
+      !options.successActionCreator || typeof options.successActionCreator === 'function',
+      'Cmd.run: successActionCreator option must be a function if specified'
+    )
+
+    throwInvariant(
+      !options.failActionCreator || typeof options.failActionCreator === 'function',
+      'Cmd.run: failActionCreator option must be a function if specified'
+    )
+
+    throwInvariant(
+      !options.args || options.args.constructor === Array,
+      'Cmd.run: args option must be an array if specified'
+    )
+  }
+
+  return Object.freeze({
+    [isCmdSymbol]: true,
+    type: cmdTypes.RUN,
+    func,
+    ...options
+  })
+}
 
 const promise = (
   promiseFactory,
@@ -100,6 +146,7 @@ const promise = (
   failureActionCreator,
   ...args
 ) => {
+  console.warn('Cmd.promise is deprecated. Please use Cmd.run (https://github.com/bdwain/redux-loop/blob/master/docs/ApiDocs.md#cmdruncmds)')
   if (process.env.NODE_ENV !== 'production') {
     throwInvariant(
       typeof promiseFactory === 'function',
@@ -117,12 +164,9 @@ const promise = (
     )
   }
 
-  return Object.freeze({
-    [isCmdSymbol]: true,
-    type: cmdTypes.PROMISE,
-    promiseFactory,
+  return run(promiseFactory, {
     successActionCreator,
-    failureActionCreator,
+    failActionCreator: failureActionCreator,
     args
   })
 }
@@ -133,6 +177,7 @@ const call = (
   actionCreator,
   ...args
 ) => {
+  console.warn('Cmd.call is deprecated. Please use Cmd.run (https://github.com/bdwain/redux-loop/blob/master/docs/ApiDocs.md#cmdruncmds)')
   if (process.env.NODE_ENV !== 'production') {
     throwInvariant(
       typeof resultFactory === 'function',
@@ -145,67 +190,41 @@ const call = (
     )
   }
 
-  return Object.freeze({
-    [isCmdSymbol]: true,
-    type: cmdTypes.CALL,
-    resultFactory,
-    actionCreator,
+  return run(resultFactory, {
+    successActionCreator: actionCreator,
     args
   })
 }
 
-
-const callback = (
-  nodeStyleFunction,
-  successActionCreator,
-  failureActionCreator,
-  ...args
-) => {
+const action = (actionToDispatch) => {
   if (process.env.NODE_ENV !== 'production') {
     throwInvariant(
-      typeof nodeStyleFunction === 'function',
-      'Cmd.callback: first argument to Cmd.callback must be a function that accepts a callback'
-    )
-
-    throwInvariant(
-      typeof successActionCreator === 'function',
-      'Cmd.callback: second argument to Cmd.callback must be a function that returns an action'
-    )
-
-    throwInvariant(
-      typeof failureActionCreator === 'function',
-      'Cmd.callback: third argument to Cmd.callback must be a function that returns an action'
+      typeof actionToDispatch === 'object' && actionToDispatch !== null && typeof actionToDispatch.type !== 'undefined',
+      'Cmd.action: first argument and only argument to Cmd.action must be an action'
     )
   }
 
   return Object.freeze({
     [isCmdSymbol]: true,
-    type: cmdTypes.CALLBACK,
-    nodeStyleFunction,
-    successActionCreator,
-    failureActionCreator,
-    args,
+    type: cmdTypes.ACTION,
+    actionToDispatch
   })
 }
 
-
-const constant = (action) => {
+const constant = (actionToDispatch) => {
+  console.warn('Cmd.constant has been renamed Cmd.action.')
   if (process.env.NODE_ENV !== 'production') {
     throwInvariant(
-      typeof action === 'object' && action !== null && typeof action.type !== 'undefined',
+      typeof actionToDispatch === 'object' && actionToDispatch !== null && typeof actionToDispatch.type !== 'undefined',
       'Cmd.constant: first argument and only argument to Cmd.constant must be an action'
     )
   }
-
-  return Object.freeze({
-    [isCmdSymbol]: true,
-    type: cmdTypes.CONSTANT,
-    action,
-  })
+  return action(actionToDispatch)
 }
 
 
 const arbitrary = (func, ...args) => {
+  console.warn('Cmd.arbitrary is deprecated. Please use Cmd.run (https://github.com/bdwain/redux-loop/blob/master/docs/ApiDocs.md#cmdruncmds)')
   if (process.env.NODE_ENV !== 'production') {
     throwInvariant(
       typeof func === 'function',
@@ -213,12 +232,7 @@ const arbitrary = (func, ...args) => {
     )
   }
 
-  return Object.freeze({
-    [isCmdSymbol]: true,
-    type: cmdTypes.ARBITRARY,
-    func,
-    args,
-  })
+  return run(func, {args})
 }
 
 const batch = (cmds) => {
@@ -275,6 +289,41 @@ const map = (
   })
 }
 
+/*
+const callback = (
+  nodeStyleFunction,
+  successActionCreator,
+  failureActionCreator,
+  ...args
+) => {
+  if (process.env.NODE_ENV !== 'production') {
+    throwInvariant(
+      typeof nodeStyleFunction === 'function',
+      'Cmd.callback: first argument to Cmd.callback must be a function that accepts a callback'
+    )
+
+    throwInvariant(
+      typeof successActionCreator === 'function',
+      'Cmd.callback: second argument to Cmd.callback must be a function that returns an action'
+    )
+
+    throwInvariant(
+      typeof failureActionCreator === 'function',
+      'Cmd.callback: third argument to Cmd.callback must be a function that returns an action'
+    )
+  }
+
+  return Object.freeze({
+    [isCmdSymbol]: true,
+    type: cmdTypes.CALLBACK,
+    nodeStyleFunction,
+    successActionCreator,
+    failureActionCreator,
+    args,
+  })
+}
+*/
+
 
 const none = Object.freeze({
   [isCmdSymbol]: true,
@@ -282,9 +331,11 @@ const none = Object.freeze({
 })
 
 export default {
+  run,
+  action,
   promise,
   call,
-  callback,
+  //callback,
   constant,
   arbitrary,
   batch,
