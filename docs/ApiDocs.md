@@ -8,12 +8,10 @@
 * [`isLoop(object)`](#isloopobject-boolean)
 * [`Cmds`](#cmds)
   * [`Cmd.none()`](#cmdnone)
-  * [`Cmd.constant(action)`](#cmdconstantaction)
-  * [`Cmd.call(functionToRun, actionCreator, ...args)`](#cmdcallfunctiontorun-actioncreator-args)
-  * [`Cmd.promise(functionToRun, resolveActionCreator, rejectActionCreator, ...args)`](#cmdpromisefunctiontorun-resolveactioncreator-rejectactioncreator-args)
+  * [`Cmd.action(actionToDispatch)`](#cmdactionactiontodispatch)
+  * [`Cmd.run(func, options)`](#cmdrunfunc-options)
   * [`Cmd.batch(cmds)`](#cmdbatchcmds)
   * [`Cmd.sequence(cmds)`](#cmdsequencecmds)
-  * [`Cmd.arbitrary(functionToRun, ...args)`](#cmdarbitraryfunctiontorun-args)
   * [`Cmd.map(cmd, higherOrderActionCreator, [...additionalArgs])`](#cmdmapcmd-higherorderactioncreator-additionalargs)
 * [`Cmd.getState`](#cmdgetstate)
 * [`Cmd.dispatch`](#cmddispatch)
@@ -93,7 +91,7 @@ function reducer(state, action) {
       // run next.
       return loop(
         { ...state, first: true },
-        Cmd.constant({ type: 'SECOND' })
+        Cmd.action({ type: 'SECOND' })
       );
 
     case 'SECOND':
@@ -127,8 +125,11 @@ function reducer(state, action) {
     case 'LOAD_START':
       return loop(
         { ...state, isLoading: true },
-        Cmd.promise(apiFetch, resolveActionCreator, rejectActionCreator, action.payload.id)
-      );
+        Cmd.run(apiFetch, {
+           sucessActionCreator: resolveActionCreator,
+           failActionCreator: rejectActionCreator,
+           args: [action.payload.id]
+        })
     case 'LOAD_COMPLETE':
       return {
         ...state,
@@ -220,16 +221,19 @@ return loop(
 return { state, someProp: action.payload }
 ```
 
-### `Cmd.constant(action)`
+### `Cmd.action(actionToDispatch)`
 
-* `action: Action` &ndash; a plain object with a `type` property that the store
+* `actionToDispatch: Action` &ndash; a plain object with a `type` property that the store
   can dispatch.
 
 #### Notes
 
-`constant` allows you to schedule a plain action object for dispatch after the
+`action` allows you to schedule a plain action object for dispatch after the
 current dispatch is complete. It can be useful for initiating multiple sequences
-that run in parallel but don't need to communicate or complete at the same time.
+that run in parallel but don't need to communicate or complete at the same time. 
+Make sure your action creator is pure if creating an action from a reducer.
+
+Cmd.action was renamed from Cmd.constant
 
 #### Examples
 
@@ -239,66 +243,43 @@ that run in parallel but don't need to communicate or complete at the same time.
 // dispatch for the action SOME_ACTION.
 return loop(
   { state, someProp: action.payload },
-  Cmd.constant({ type: 'SOME_ACTION' })
+  Cmd.action({ type: 'SOME_ACTION' })
 );
 ```
 
-### `Cmd.call(functionToRun, actionCreator, ...args)`
 
-* `functionToRun: (...Array<any>) => any` &ndash; a function that will run
-  some synchronous side effects and then return a value.
-* `actionCreator: (any) => Action` &ndash; a function that that takes the value
- returned from functionToRun and returns an action which will be dispatched
-* `args: Array<any>` &ndash; any arguments to call `functionToRun` with.
+### `Cmd.run(func, options)`
 
-
-#### Notes
-
-`call` allows you to declaratively schedule a function with some arguments that
-can cause synchronous effects like manipulating `localStorage` or interacting
-with `window` and then dispatch an action to represent the outcome. The return
-value of `call` can be anything you want. The action creator just needs to be able to 
-turn that value into an action. 
-
-#### Examples
-
-```js
-const readKeyFromLocalStorage = (key) => {
-  return localStorage[key];
-}
-
-// ...
-
-return loop(
-  state,
-  Cmd.call(readKeyFromLocalStorage, updateFromLocalStorageAction, action.payload)
-);
-```
-
-### `Cmd.promise(functionToRun, resolveActionCreator, rejectActionCreator, ...args)`
-
-* `functionToRun: (...Array<any>) => Promise<any>` &ndash; a function which,
-  when called with the values in `args`, will return a promise.
-* `resolveActionCreator: (any) => Action` &ndash; a function that that takes the
-promise resolution value of the promise returned by functionToRun and returns an
-action which will be dispatched.
-* `rejectActionCreator: (any) => Action` &ndash; a function that that takes the
-promise rejection value of the promise returned by functionToRun and returns an
-action which will be dispatched.
-* `args: Array<any>` &ndash; any arguments to call `functionToRun` with.
+* `func: (...Array<any>) => Promise<any>` &ndash; a function to run
+* `options.successActionCreator: (any) => Action` &ndash; an optional function that that takes the
+promise resolution value (if func returns a promise) or the return value (if func does not return a promise) and returns an action which will be dispatched.
+* `options.failActionCreator: (any) => Action` &ndash; an optional function that that takes the
+promise rejection value (if func returns a promise) or the thrown error (if func throws) and returns an action which will be dispatched. This should not be omitted if the function is expected to potentially throw an exception. Exceptions are rethrown if there is no fail handler.
+* `options.args args: Array<any>` &ndash; an optional array of arguments to call `func` with.
+* `options.forceSync args: Array<any>` &ndash; if true, this Cmd will finish synchronously even if func returns a promise. Useful if the Cmd runs as part of a batch but you don't care about the result and want the batch to finish faster.
 
 #### Notes
 
-`promise` allows you to declaratively schedule a function to be called with some
-arguments that returns a Promise, which will then be awaited and the resulting 
-value turned into a success or failure action and then dispatched. This function
-allows you to represent almost any kind of async process to the store without
+`run` allows you to declaratively schedule a function to be called with some
+arguments, and dispatch actions based on the results. This
+allows you to represent almost any kind of runnable process to the store without
 sacrificing functional purity or having to encapsulate implicit state outside
-of your reducer. Keep in mind, functions that are handed off to the store with `promise`
+of your reducer. Keep in mind, functions that are handed off to the store with `run`
 are never invoked in the reducer, only by the store during your application's
-runtime. You can invoke a reducer that returns a `promise` effect as many times
+runtime. You can invoke a reducer that returns a `run` effect as many times
 as you want and always get the same result by deep-equality without triggering
-any async function calls in the process.
+any side-effect function calls in the process.
+
+By default, if func returns a promise, that's promises's resolution and rejection
+values are used in the success and fail action creators (if provided). If func does
+not return a promise, the return value is used for the success action creator, and
+the fail action creator is only used if an error is thrown. 
+
+If a Run Cmd is used in a batch or sequence and func returns a promise, the batch/sequence will not
+finish until the returned promise resolves/rejects. If a promise is not returned, the batch/sequence
+does not wait. This can be forced (even if a promise is returned) by using the forceSync option.
+
+Cmd.promise, Cmd.call, and Cmd.arbitrary were replaced by Cmd.run
 
 #### Examples
 
@@ -328,7 +309,11 @@ function reducer(state , action) {
   case 'INIT':
     return loop(
       {...state, initStarted: true},
-      Cmd.promise(fetchUser, userFetchSuccessfulAction, userFetchFailedAction, '123')
+      Cmd.run(fetchUser, {
+        successActionCreator: userFetchSuccessfulAction,
+        failActionCreator: userFetchFailedAction,
+        args: ['123']
+      })
     );
 
   case 'USER_FETCH_SUCCESSFUL':
@@ -353,7 +338,7 @@ function reducer(state , action) {
 `batch` allows you to group cmds as a single cmd to be awaited and
 dispatched. All cmds run in a batch will be executed in parallel, but they
 will not proceed in parallel. For example, if a long-running request is batched
-with an action scheduled with `Cmd.constant`, no dispatching of either
+with an action scheduled with `Cmd.action`, no dispatching of either
 cnd will occur until the long-running request completes.
 
 #### Examples
@@ -367,8 +352,16 @@ function reducer(state , action) {
     return loop(
       {...state, initStarted: true},
       Cmd.batch([
-        Cmd.promise(fetchUser, userFetchSuccessfulAction, userFetchFailedAction, '123'),
-        Cmd.promise(fetchItem, itemFetchSuccessfulAction, itemFetchFailedAction, '456')
+        Cmd.run(fetchUser, {
+          successActiionCreator: userFetchSuccessfulAction
+            failActionCreator: userFetchFailedAction,
+            args: ['123']
+        }),
+        Cmd.run(fetchItem, {
+          successActiionCreator: itemFetchSuccessfulAction,
+            failActionCreator: itemFetchFailedAction, =
+            args: ['456']
+        })
       ])
     );
 
@@ -397,34 +390,8 @@ function reducer(state , action) {
 
 #### Notes
 
-`sequence` is similar to batch, but the cmds run one after the other. The resulting actions are still dispatched all at once after all cmds are done.
-
-### `Cmd.arbitrary(functionToRun, ...args)`
-
-* `functionToRun: (...Array<any>) => any` &ndash; a function that will run
-  some side effects (synchronous or asynchronous). 
-* `args: Array<any>` &ndash; any arguments to call `functionToRun` with.
-
-
-#### Notes
-
-`arbitrary` allows you to declaratively schedule a function with some arguments that
-can cause side effects. The return value is not checked and no action will be dispatched. The only exception to this is that if a promise is returned and the cmd is used in a batch or a sequence, the result will be held up until the promise is resolved or rejected.
-
-#### Examples
-
-```js
-const writeValueToStorage = (key, value) => {
-  localStorage.setItem(key, value);
-}
-
-// ...
-
-return loop(
-  state,
-  Cmd.arbitrary(writeValueToStorage, 'key', action.value)
-);
-```
+`sequence` is similar to batch, but the cmds wait for the previous Cmd to finish.
+The resulting actions are still dispatched all at once after all cmds are done.
 
 ### `Cmd.map(cmd, higherOrderActionCreator, [...additionalArgs])`
 
@@ -466,7 +433,11 @@ function nestedReducer(state = 0, action) {
     case 'INCREMENT_START':
       return loop(
         state,
-        Cmd.promise(incrementAsync, incrementSuccessAction, incremenetFailedAction, action.payload)
+        Cmd.run(incrementAsync, {
+           successActionCreator: incrementSuccessAction,
+           failActionCreator: incremenetFailedAction,
+           args: [action.payload]
+        })
       );
     case 'INCREMENT':
       return loop(
@@ -523,7 +494,10 @@ function reducer(state, action) {
   case 'ACTION':
     return loop(
       {...state, initStarted: true},
-      Cmd.call(doSomething, doSomethingResultAction, Cmd.getState)
+      Cmd.run(doSomething, {
+         successActionCreatro: doSomethingResultAction,
+         args: [Cmd.getState]
+      })
     );
   default:
     return state;
@@ -553,7 +527,10 @@ function reducer(state, action) {
   case 'ACTION':
     return loop(
       {...state, initStarted: true},
-      Cmd.call(doSomething, doSomethingResultAction, Cmd.dispatch)
+      Cmd.run(doSomething, {
+         successActionCreatro: doSomethingResultAction,
+         args: [Cmd.dispatch]
+      })
     );
   default:
     return state;

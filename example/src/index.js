@@ -91,7 +91,11 @@ const reducer = createReducer({
       return loop(state
         .setIn(['short', 'loading'], true)
         .setIn(['short', 'failed'], false),
-        Cmd.promise(Api.shortIncrement, Actions.shortIncrementSucceed, Actions.shortIncrementFail, amount)
+        Cmd.run(Api.shortIncrement, {
+          successActionCreator: Actions.shortIncrementSucceed,
+          failActionCreator: Actions.shortIncrementFail,
+          args: [amount]
+        })
     )
   },
 
@@ -118,7 +122,11 @@ const reducer = createReducer({
     return loop(state
       .setIn(['long', 'loading'], true)
       .setIn(['long', 'failed'], false),
-    Cmd.promise(Api.longIncrement, Actions.longIncrementSucceed, Actions.longIncrementFail, amount))
+    Cmd.run(Api.longIncrement, {
+      successActionCreator: Actions.longIncrementSucceed,
+      failActionCreator: Actions.longIncrementFail,
+      args: [amount]
+    }))
   },
 
   [Actions.longIncrementSucceed]: (state, amount) => {
@@ -147,8 +155,8 @@ const reducer = createReducer({
     console.log('both start');
     return loop(state,
       Cmd.batch([
-        Cmd.constant(Actions.shortIncrementStart(amount)),
-        Cmd.constant(Actions.longIncrementStart(amount)),
+        Cmd.action(Actions.shortIncrementStart(amount)),
+        Cmd.action(Actions.longIncrementStart(amount)),
       ])
   )},
 }, initialState);
