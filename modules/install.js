@@ -43,7 +43,7 @@ export function install() {
           return Promise.all(actions.map(dispatch))
         })
         .catch((error) => {
-          console.error(loopPromiseCaughtError(originalAction.type))
+          console.error(loopPromiseCaughtError(originalAction.type, error))
           throw error
         })
     }
