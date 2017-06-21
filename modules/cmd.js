@@ -37,7 +37,7 @@ function handleRunCmd(cmd, dispatch, getState){
 
     if (isPromiseLike(result) && !cmd.forceSync){
       return result.then(onSuccess, onFail).then(action => {
-        return action ? [action] : null;
+        return action ? [action] : [];
       })
     }
     let resultAction = onSuccess(result);
